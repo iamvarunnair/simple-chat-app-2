@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Chat Group</title>
+    <link type="text/css" href="https://cdn.datatables.net/1.10.20/css/jquery.dataTables.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <textarea id="chat-log" cols="100" rows="20"></textarea><br />
+    <input id="chat-message-input" type="text" size="100" /><br />
+    <input id="chat-message-submit" type="button" value="Send" />
+    {% csrf_token %}
+
+
+
+    <br /><br /><br />
+    <a href="{% url 'logout' %}" style="color: crimson; text-decoration: none;">
+        <span>Log out?</span>
+    </a>
+    <div>
+        <table id="example" class="display" style="width:100%">
+            <thead>
+                <tr>
+                    <th>User Id</th>
+                    <th>User Name</th>
+
+                    <th>select</th>
+                </tr>
+            </thead>
+            <tbody id="user_list_table_body">
+            {{ user_list }}
+
+
+                {% for i in user_list %}
+                <tr>
+                     <td class="selected-user-id">{{i.user_id}}</td>
+                    <td>{{i.user_name}}</td>
+
+                    <td><input class="selected-user-checkbox" type="checkbox"></td>
+
+
+                </tr>
+                {% endfor %}
+            </tbody>
+
+
+            <input id="add-member-button" type="submit" value="Add member">
+            <br><br>
+             <input id="delete-message-button" type="submit" value="Delete message">
+            <br><br>
+            <input id="remove-member-button" type="submit" value="Remove member">
+
+        </table>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.js">
+    </script>
+    <script src="https://cdn.datatables.net/1.10.20/js/jquery.dataTables.min.js">
+    </script>
+
+    <script>
+
+        $(document).ready(function () {
+            $('#example').DataTable();
+        });
+
+        var groupName = {{ group_name_json }};
+        var groupDetails = {{ group_details }};
+        var chatSocket = new WebSocket(
+        'ws://' + window.location.host +
+        '/ws/chat/' + groupName + '/');
+
+        chatSocket.onmessage = function(e) {
+            var data = JSON.parse(e.data);
+            var message = data['message'];
+            for( let i =0;i<message.length;i++)
+                document.querySelector('#chat-log').value += (message[i] + '\n');
+        };
+
+        chatSocket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
+
+        document.querySelector('#chat-message-input').focus();
+        document.querySelector('#chat-message-input').onkeyup = function(e) {
+            if (e.keyCode === 13) {  // enter, return
+                document.querySelector('#chat-message-submit').click();
+            }
+        };
+
+        document.querySelector('#chat-message-submit').onclick = function(e) {
+            var messageInputDom = document.querySelector('#chat-message-input');
+            var message = messageInputDom.value;
+            chatSocket.send(JSON.stringify({
+                'message': message
+            }));
+
+            messageInputDom.value = '';
+        };
+
+        console.log('logger', groupName, groupDetails)
+
+        document.querySelector('#add-member-button').onclick = function (e) {
+            var selectedUserListDom = document.getElementById('user_list_table_body').getElementsByClassName('selected-user-checkbox');
+            var selectedUserList = []
+            var length = selectedUserListDom.length;
+            for (let i = 0; i < length; i++) {
+                if (selectedUserListDom[i].checked) {
+                    selectedUserList.push(parseInt(document.getElementById('user_list_table_body').getElementsByClassName('selected-user-id')[i].innerText));
+                }
+            }
+            console.log('l75', selectedUserList)
+
+            var xmlhttp = new XMLHttpRequest();
+            xmlhttp.onreadystatechange = function () {
+                if ( this.readyState == 4 & this.status == 200) {
+                    console.log('response data', this.responseText);
+                    response = JSON.parse(this.responseText);
+                    console.log('response data', response);
+                }
+            }
+            xmlhttp.open("POST", "{% url 'add_members' %}", true);
+            xmlhttp.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
+            xmlhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+            xmlhttp.send(JSON.stringify({ "selected_users": selectedUserList, "group_details": {{ group_details }} }));
+
+        };
+
+
+        document.querySelector('#add-member-button').onclick = function (e) {
+            var selectedUserListDom = document.getElementById('user_list_table_body').getElementsByClassName('selected-user-checkbox');
+            var selectedUserList = []
+            var length = selectedUserListDom.length;
+            for (let i = 0; i < length; i++) {
+                if (selectedUserListDom[i].checked) {
+                    selectedUserList.push(parseInt(document.getElementById('user_list_table_body').getElementsByClassName('selected-user-id')[i].innerText));
+                }
+            }
+            console.log('l75', selectedUserList)
+
+            var xmlhttp = new XMLHttpRequest();
+            xmlhttp.onreadystatechange = function () {
+                if ( this.readyState == 4 & this.status == 200) {
+                    console.log('response data', this.responseText);
+                    response = JSON.parse(this.responseText);
+                    console.log('response data', response);
+                }
+            }
+            xmlhttp.open("POST", "{% url 'add_members' %}", true);
+            xmlhttp.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
+            xmlhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
+            xmlhttp.send(JSON.stringify({ "selected_users": selectedUserList, "group_details": {{ group_details }} }));
+
+        };
+
+
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = cookies[i].trim();
+                    // Does this cookie string begin with the name we want?
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+
+
+
+
+
+    </script>
+
+</body>
+
+
+</html>
