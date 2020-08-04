@@ -1,7 +1,6 @@
-from asgiref.sync import async_to_sync
+from asgiref.sync import sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-# from channels.generic.websocket import WebsocketConsumer
 import json
 from chat import models, serializers
 from django.shortcuts import render, redirect
@@ -20,11 +19,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
     Step 9: send messages and accept connection.
     """
     async def connect(self):
-        if self.scope['session'].has_key('user_id') & self.scope['session'].has_key('user_name'):
+        user_id = await self.get_key_in_session('user_id')
+        user_name = await self.get_key_in_session('user_name')
+        if user_id != None and user_name != None:
             self.room_name = self.scope['url_route']['kwargs']['room_name']
             user_details = await self.get_or_create_chat_room(
-                self.room_name, self.scope['session']['user_id'],
-                self.scope['session']['user_name']
+                self.room_name, user_id, user_name
             )
             self.user_details = user_details
             self.room_group_name = self.user_details['group']['name']
@@ -34,13 +34,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.channel_name
             )
             accept_response = await self.accept()
-            # await self.channel_layer.group_send(
-            #     self.room_group_name,
-            #     {
-            #         'type': 'chat_message',
-            #         'message': self.user_details['message_history']
-            #     }
-            # )
             print('history: ', self.user_details['message_history'])
             await self.send(text_data=json.dumps({
                 'message': self.user_details['message_history']
@@ -187,3 +180,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
             group_id__exact=group_id).update(status=2)
         models.ChatRoom.objects.filter(
             chat_room_id__exact=chat_room_id).update(status=2)
+    """
+    For some reason self.scope['session'] stopped working (had problem accessing db from async cycle)
+    in async consumers even though SessionMiddlewareStack was implemented
+    in channel_tut.routing thus had to create a sync_to_async function.
+    """
+    @sync_to_async
+    def get_key_in_session(self, key):
+        if self.scope['session'].has_key(key):
+            return self.scope['session'].get(key)
+        return None
